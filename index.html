@@ -1,0 +1,1427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Arvind Nagaonkar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&family=Noto+Serif+JP:wght@300;400&display=swap" rel="stylesheet" />
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel">
+
+// tweaks-panel.jsx
+// Reusable Tweaks shell + form-control helpers.
+//
+// Owns the host protocol (listens for __activate_edit_mode / __deactivate_edit_mode,
+// posts __edit_mode_available / __edit_mode_set_keys / __edit_mode_dismissed) so
+// individual prototypes don't re-roll it. Ships a consistent set of controls so you
+// don't hand-draw <input type="range">, segmented radios, steppers, etc.
+//
+// Usage (in an HTML file that loads React + Babel):
+//
+//   const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+//     "primaryColor": "#D97757",
+//     "fontSize": 16,
+//     "density": "regular",
+//     "dark": false
+//   }/*EDITMODE-END*/;
+//
+//   function App() {
+//     const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+//     return (
+//       <div style={{ fontSize: t.fontSize, color: t.primaryColor }}>
+//         Hello
+//         <TweaksPanel>
+//           <TweakSection label="Typography" />
+//           <TweakSlider label="Font size" value={t.fontSize} min={10} max={32} unit="px"
+//                        onChange={(v) => setTweak('fontSize', v)} />
+//           <TweakRadio  label="Density" value={t.density}
+//                        options={['compact', 'regular', 'comfy']}
+//                        onChange={(v) => setTweak('density', v)} />
+//           <TweakSection label="Theme" />
+//           <TweakColor  label="Primary" value={t.primaryColor}
+//                        onChange={(v) => setTweak('primaryColor', v)} />
+//           <TweakToggle label="Dark mode" value={t.dark}
+//                        onChange={(v) => setTweak('dark', v)} />
+//         </TweaksPanel>
+//       </div>
+//     );
+//   }
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+const __TWEAKS_STYLE = `
+  .twk-panel{position:fixed;right:16px;bottom:16px;z-index:2147483646;width:280px;
+    max-height:calc(100vh - 32px);display:flex;flex-direction:column;
+    background:rgba(250,249,247,.78);color:#29261b;
+    -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+    border:.5px solid rgba(255,255,255,.6);border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 12px 40px rgba(0,0,0,.18);
+    font:11.5px/1.4 ui-sans-serif,system-ui,-apple-system,sans-serif;overflow:hidden}
+  .twk-hd{display:flex;align-items:center;justify-content:space-between;
+    padding:10px 8px 10px 14px;cursor:move;user-select:none}
+  .twk-hd b{font-size:12px;font-weight:600;letter-spacing:.01em}
+  .twk-x{appearance:none;border:0;background:transparent;color:rgba(41,38,27,.55);
+    width:22px;height:22px;border-radius:6px;cursor:default;font-size:13px;line-height:1}
+  .twk-x:hover{background:rgba(0,0,0,.06);color:#29261b}
+  .twk-body{padding:2px 14px 14px;display:flex;flex-direction:column;gap:10px;
+    overflow-y:auto;overflow-x:hidden;min-height:0;
+    scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.15) transparent}
+  .twk-body::-webkit-scrollbar{width:8px}
+  .twk-body::-webkit-scrollbar-track{background:transparent;margin:2px}
+  .twk-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px;
+    border:2px solid transparent;background-clip:content-box}
+  .twk-body::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.25);
+    border:2px solid transparent;background-clip:content-box}
+  .twk-row{display:flex;flex-direction:column;gap:5px}
+  .twk-row-h{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+  .twk-lbl{display:flex;justify-content:space-between;align-items:baseline;
+    color:rgba(41,38,27,.72)}
+  .twk-lbl>span:first-child{font-weight:500}
+  .twk-val{color:rgba(41,38,27,.5);font-variant-numeric:tabular-nums}
+
+  .twk-sect{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:rgba(41,38,27,.45);padding:10px 0 0}
+  .twk-sect:first-child{padding-top:0}
+
+  .twk-field{appearance:none;width:100%;height:26px;padding:0 8px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:7px;
+    background:rgba(255,255,255,.6);color:inherit;font:inherit;outline:none}
+  .twk-field:focus{border-color:rgba(0,0,0,.25);background:rgba(255,255,255,.85)}
+  select.twk-field{padding-right:22px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='rgba(0,0,0,.5)' d='M0 0h10L5 6z'/></svg>");
+    background-repeat:no-repeat;background-position:right 8px center}
+
+  .twk-slider{appearance:none;-webkit-appearance:none;width:100%;height:4px;margin:6px 0;
+    border-radius:999px;background:rgba(0,0,0,.12);outline:none}
+  .twk-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:14px;height:14px;border-radius:50%;background:#fff;
+    border:.5px solid rgba(0,0,0,.12);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:default}
+  .twk-slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:#fff;border:.5px solid rgba(0,0,0,.12);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:default}
+
+  .twk-seg{position:relative;display:flex;padding:2px;border-radius:8px;
+    background:rgba(0,0,0,.06);user-select:none}
+  .twk-seg-thumb{position:absolute;top:2px;bottom:2px;border-radius:6px;
+    background:rgba(255,255,255,.9);box-shadow:0 1px 2px rgba(0,0,0,.12);
+    transition:left .15s cubic-bezier(.3,.7,.4,1),width .15s}
+  .twk-seg.dragging .twk-seg-thumb{transition:none}
+  .twk-seg button{appearance:none;position:relative;z-index:1;flex:1;border:0;
+    background:transparent;color:inherit;font:inherit;font-weight:500;height:22px;
+    border-radius:6px;cursor:default;padding:0}
+
+  .twk-toggle{position:relative;width:32px;height:18px;border:0;border-radius:999px;
+    background:rgba(0,0,0,.15);transition:background .15s;cursor:default;padding:0}
+  .twk-toggle[data-on="1"]{background:#34c759}
+  .twk-toggle i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+  .twk-toggle[data-on="1"] i{transform:translateX(14px)}
+
+  .twk-num{display:flex;align-items:center;height:26px;padding:0 0 0 8px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:7px;background:rgba(255,255,255,.6)}
+  .twk-num-lbl{font-weight:500;color:rgba(41,38,27,.6);cursor:ew-resize;
+    user-select:none;padding-right:8px}
+  .twk-num input{flex:1;min-width:0;height:100%;border:0;background:transparent;
+    font:inherit;font-variant-numeric:tabular-nums;text-align:right;padding:0 8px 0 0;
+    outline:none;color:inherit;-moz-appearance:textfield}
+  .twk-num input::-webkit-inner-spin-button,.twk-num input::-webkit-outer-spin-button{
+    -webkit-appearance:none;margin:0}
+  .twk-num-unit{padding-right:8px;color:rgba(41,38,27,.45)}
+
+  .twk-btn{appearance:none;height:26px;padding:0 12px;border:0;border-radius:7px;
+    background:rgba(0,0,0,.78);color:#fff;font:inherit;font-weight:500;cursor:default}
+  .twk-btn:hover{background:rgba(0,0,0,.88)}
+  .twk-btn.secondary{background:rgba(0,0,0,.06);color:inherit}
+  .twk-btn.secondary:hover{background:rgba(0,0,0,.1)}
+
+  .twk-swatch{appearance:none;-webkit-appearance:none;width:56px;height:22px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:6px;padding:0;cursor:default;
+    background:transparent;flex-shrink:0}
+  .twk-swatch::-webkit-color-swatch-wrapper{padding:0}
+  .twk-swatch::-webkit-color-swatch{border:0;border-radius:5.5px}
+  .twk-swatch::-moz-color-swatch{border:0;border-radius:5.5px}
+`;
+
+// ── useTweaks ───────────────────────────────────────────────────────────────
+// Single source of truth for tweak values. setTweak persists via the host
+// (__edit_mode_set_keys → host rewrites the EDITMODE block on disk).
+function useTweaks(defaults) {
+  const [values, setValues] = React.useState(defaults);
+  const setTweak = React.useCallback((key, val) => {
+    setValues((prev) => ({ ...prev, [key]: val }));
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [key]: val } }, '*');
+  }, []);
+  return [values, setTweak];
+}
+
+// ── TweaksPanel ─────────────────────────────────────────────────────────────
+// Floating shell. Registers the protocol listener BEFORE announcing
+// availability — if the announce ran first, the host's activate could land
+// before our handler exists and the toolbar toggle would silently no-op.
+// The close button posts __edit_mode_dismissed so the host's toolbar toggle
+// flips off in lockstep; the host echoes __deactivate_edit_mode back which
+// is what actually hides the panel.
+function TweaksPanel({ title = 'Tweaks', children }) {
+  const [open, setOpen] = React.useState(false);
+  const dragRef = React.useRef(null);
+  const offsetRef = React.useRef({ x: 16, y: 16 });
+  const PAD = 16;
+
+  const clampToViewport = React.useCallback(() => {
+    const panel = dragRef.current;
+    if (!panel) return;
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    const maxRight = Math.max(PAD, window.innerWidth - w - PAD);
+    const maxBottom = Math.max(PAD, window.innerHeight - h - PAD);
+    offsetRef.current = {
+      x: Math.min(maxRight, Math.max(PAD, offsetRef.current.x)),
+      y: Math.min(maxBottom, Math.max(PAD, offsetRef.current.y)),
+    };
+    panel.style.right = offsetRef.current.x + 'px';
+    panel.style.bottom = offsetRef.current.y + 'px';
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    clampToViewport();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', clampToViewport);
+      return () => window.removeEventListener('resize', clampToViewport);
+    }
+    const ro = new ResizeObserver(clampToViewport);
+    ro.observe(document.documentElement);
+    return () => ro.disconnect();
+  }, [open, clampToViewport]);
+
+  React.useEffect(() => {
+    const onMsg = (e) => {
+      const t = e?.data?.type;
+      if (t === '__activate_edit_mode') setOpen(true);
+      else if (t === '__deactivate_edit_mode') setOpen(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const dismiss = () => {
+    setOpen(false);
+    window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*');
+  };
+
+  const onDragStart = (e) => {
+    const panel = dragRef.current;
+    if (!panel) return;
+    const r = panel.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY;
+    const startRight = window.innerWidth - r.right;
+    const startBottom = window.innerHeight - r.bottom;
+    const move = (ev) => {
+      offsetRef.current = {
+        x: startRight - (ev.clientX - sx),
+        y: startBottom - (ev.clientY - sy),
+      };
+      clampToViewport();
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  if (!open) return null;
+  return (
+    <>
+      <style>{__TWEAKS_STYLE}</style>
+      <div ref={dragRef} className="twk-panel"
+           style={{ right: offsetRef.current.x, bottom: offsetRef.current.y }}>
+        <div className="twk-hd" onMouseDown={onDragStart}>
+          <b>{title}</b>
+          <button className="twk-x" aria-label="Close tweaks"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={dismiss}>✕</button>
+        </div>
+        <div className="twk-body">{children}</div>
+      </div>
+    </>
+  );
+}
+
+// ── Layout helpers ──────────────────────────────────────────────────────────
+
+function TweakSection({ label, children }) {
+  return (
+    <>
+      <div className="twk-sect">{label}</div>
+      {children}
+    </>
+  );
+}
+
+function TweakRow({ label, value, children, inline = false }) {
+  return (
+    <div className={inline ? 'twk-row twk-row-h' : 'twk-row'}>
+      <div className="twk-lbl">
+        <span>{label}</span>
+        {value != null && <span className="twk-val">{value}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ── Controls ────────────────────────────────────────────────────────────────
+
+function TweakSlider({ label, value, min = 0, max = 100, step = 1, unit = '', onChange }) {
+  return (
+    <TweakRow label={label} value={`${value}${unit}`}>
+      <input type="range" className="twk-slider" min={min} max={max} step={step}
+             value={value} onChange={(e) => onChange(Number(e.target.value))} />
+    </TweakRow>
+  );
+}
+
+function TweakToggle({ label, value, onChange }) {
+  return (
+    <div className="twk-row twk-row-h">
+      <div className="twk-lbl"><span>{label}</span></div>
+      <button type="button" className="twk-toggle" data-on={value ? '1' : '0'}
+              role="switch" aria-checked={!!value}
+              onClick={() => onChange(!value)}><i /></button>
+    </div>
+  );
+}
+
+function TweakRadio({ label, value, options, onChange }) {
+  const trackRef = React.useRef(null);
+  const [dragging, setDragging] = React.useState(false);
+  const opts = options.map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
+  const idx = Math.max(0, opts.findIndex((o) => o.value === value));
+  const n = opts.length;
+
+  // The active value is read by pointer-move handlers attached for the lifetime
+  // of a drag — ref it so a stale closure doesn't fire onChange for every move.
+  const valueRef = React.useRef(value);
+  valueRef.current = value;
+
+  const segAt = (clientX) => {
+    const r = trackRef.current.getBoundingClientRect();
+    const inner = r.width - 4;
+    const i = Math.floor(((clientX - r.left - 2) / inner) * n);
+    return opts[Math.max(0, Math.min(n - 1, i))].value;
+  };
+
+  const onPointerDown = (e) => {
+    setDragging(true);
+    const v0 = segAt(e.clientX);
+    if (v0 !== valueRef.current) onChange(v0);
+    const move = (ev) => {
+      if (!trackRef.current) return;
+      const v = segAt(ev.clientX);
+      if (v !== valueRef.current) onChange(v);
+    };
+    const up = () => {
+      setDragging(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  return (
+    <TweakRow label={label}>
+      <div ref={trackRef} role="radiogroup" onPointerDown={onPointerDown}
+           className={dragging ? 'twk-seg dragging' : 'twk-seg'}>
+        <div className="twk-seg-thumb"
+             style={{ left: `calc(2px + ${idx} * (100% - 4px) / ${n})`,
+                      width: `calc((100% - 4px) / ${n})` }} />
+        {opts.map((o) => (
+          <button key={o.value} type="button" role="radio" aria-checked={o.value === value}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </TweakRow>
+  );
+}
+
+function TweakSelect({ label, value, options, onChange }) {
+  return (
+    <TweakRow label={label}>
+      <select className="twk-field" value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map((o) => {
+          const v = typeof o === 'object' ? o.value : o;
+          const l = typeof o === 'object' ? o.label : o;
+          return <option key={v} value={v}>{l}</option>;
+        })}
+      </select>
+    </TweakRow>
+  );
+}
+
+function TweakText({ label, value, placeholder, onChange }) {
+  return (
+    <TweakRow label={label}>
+      <input className="twk-field" type="text" value={value} placeholder={placeholder}
+             onChange={(e) => onChange(e.target.value)} />
+    </TweakRow>
+  );
+}
+
+function TweakNumber({ label, value, min, max, step = 1, unit = '', onChange }) {
+  const clamp = (n) => {
+    if (min != null && n < min) return min;
+    if (max != null && n > max) return max;
+    return n;
+  };
+  const startRef = React.useRef({ x: 0, val: 0 });
+  const onScrubStart = (e) => {
+    e.preventDefault();
+    startRef.current = { x: e.clientX, val: value };
+    const decimals = (String(step).split('.')[1] || '').length;
+    const move = (ev) => {
+      const dx = ev.clientX - startRef.current.x;
+      const raw = startRef.current.val + dx * step;
+      const snapped = Math.round(raw / step) * step;
+      onChange(clamp(Number(snapped.toFixed(decimals))));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  return (
+    <div className="twk-num">
+      <span className="twk-num-lbl" onPointerDown={onScrubStart}>{label}</span>
+      <input type="number" value={value} min={min} max={max} step={step}
+             onChange={(e) => onChange(clamp(Number(e.target.value)))} />
+      {unit && <span className="twk-num-unit">{unit}</span>}
+    </div>
+  );
+}
+
+function TweakColor({ label, value, onChange }) {
+  return (
+    <div className="twk-row twk-row-h">
+      <div className="twk-lbl"><span>{label}</span></div>
+      <input type="color" className="twk-swatch" value={value}
+             onChange={(e) => onChange(e.target.value)} />
+    </div>
+  );
+}
+
+function TweakButton({ label, onClick, secondary = false }) {
+  return (
+    <button type="button" className={secondary ? 'twk-btn secondary' : 'twk-btn'}
+            onClick={onClick}>{label}</button>
+  );
+}
+
+Object.assign(window, {
+  useTweaks, TweaksPanel, TweakSection, TweakRow,
+  TweakSlider, TweakToggle, TweakRadio, TweakSelect,
+  TweakText, TweakNumber, TweakColor, TweakButton,
+});
+
+</script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+section[id]{scroll-margin-top:64px}
+body{font-family:'Space Grotesk',sans-serif;background:#08080d;color:#e8e0d0;overflow-x:hidden}
+.mono{font-family:'JetBrains Mono',monospace}
+.display{font-family:'Bebas Neue',sans-serif}
+.jp{font-family:'Noto Serif JP',serif}
+::selection{background:rgba(232,60,60,0.25)}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-track{background:#08080d}
+::-webkit-scrollbar-thumb{background:#e83c3c66;border-radius:2px}
+
+.panel{border:1px solid #1e1e2e;position:relative;overflow:hidden}
+.panel::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(232,60,60,0.03) 0%,transparent 60%);pointer-events:none}
+.scanlines{position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.05) 2px,rgba(0,0,0,0.05) 4px);pointer-events:none;z-index:998;opacity:0.35}
+.chapter-mark{display:inline-flex;align-items:center;gap:10px;margin-bottom:16px}
+.chapter-mark::before{content:'';display:block;width:20px;height:2px;background:var(--acc,#e83c3c)}
+
+/* reveal */
+.reveal{opacity:0;transform:translateY(32px);transition:opacity 0.75s ease,transform 0.75s ease}
+.reveal.in{opacity:1;transform:none}
+
+/* ── SMOOTH GLITCH: clip-path sweep + subtle shift ── */
+@keyframes smoothGlitch {
+  0%,100%   { clip-path:none; transform:none; opacity:1; filter:none; }
+  8%        { clip-path:polygon(0 10%,100% 10%,100% 13%,0 13%); transform:translateX(-4px); opacity:0.9; filter:brightness(1.3); }
+  10%       { clip-path:none; transform:none; opacity:1; filter:none; }
+  18%       { clip-path:polygon(0 55%,100% 55%,100% 60%,0 60%); transform:translateX(3px); opacity:0.92; }
+  20%       { clip-path:none; transform:none; opacity:1; }
+  48%       { clip-path:polygon(0 30%,100% 30%,100% 70%,0 70%); transform:translateX(-2px) skewX(-1deg); opacity:0.95; filter:brightness(1.1); }
+  50%       { clip-path:none; transform:none; opacity:1; filter:none; }
+  68%       { clip-path:polygon(0 80%,100% 80%,100% 84%,0 84%); transform:translateX(4px); opacity:0.9; }
+  70%       { clip-path:none; transform:none; opacity:1; }
+}
+
+@keyframes radarSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+@keyframes blipPulse{0%,100%{opacity:0.9}50%{opacity:0.4}}
+@keyframes modalIn{from{opacity:0;transform:translateY(40px) scale(0.97)}to{opacity:1;transform:none}}
+@keyframes backdropIn{from{opacity:0}to{opacity:1}}
+@keyframes lf{from{transform:scaleX(0);transform-origin:left}to{transform:scaleX(1);transform-origin:left}}
+
+/* ── JP TOOLTIP ── */
+.jp-tip{position:relative;cursor:help;display:inline-block}
+.jp-tip .tip-box{
+  position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+  background:#0f0f1c;border:1px solid #2a2a3e;
+  padding:7px 12px;white-space:nowrap;pointer-events:none;
+  opacity:0;transition:opacity 0.2s;z-index:800;
+  font-family:'JetBrains Mono',monospace;font-size:10px;color:#e8e0d0;letter-spacing:1px;
+}
+.jp-tip .tip-box::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);
+  border:5px solid transparent;border-top-color:#2a2a3e;}
+.jp-tip:hover .tip-box{opacity:1}
+.jp-tip .tip-romaji{color:#6a6a8a;font-size:9px;display:block;margin-bottom:2px}
+.jp-tip .tip-meaning{color:#e8e0d0}
+
+/* ── HAMBURGER ── */
+.ham-line{display:block;width:22px;height:1.5px;background:#e8e0d0;transition:all 0.3s ease;transform-origin:center}
+.ham-open .ham-line:nth-child(1){transform:translateY(7px) rotate(45deg)}
+.ham-open .ham-line:nth-child(2){opacity:0;transform:scaleX(0)}
+.ham-open .ham-line:nth-child(3){transform:translateY(-7px) rotate(-45deg)}
+
+/* ── MOBILE MENU ── */
+.mobile-menu{position:fixed;top:56px;left:0;right:0;background:rgba(8,8,13,0.98);backdrop-filter:blur(16px);border-bottom:1px solid #1e1e2e;z-index:499;padding:24px 24px 32px;display:flex;flex-direction:column;gap:20px;transform:translateY(-110%);transition:transform 0.4s cubic-bezier(0.16,1,0.3,1);pointer-events:none}
+.mobile-menu.open{transform:translateY(0);pointer-events:auto}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .hero-grid{grid-template-columns:1fr !important}
+  .radar-wrap{display:none !important}
+  .skills-grid{grid-template-columns:1fr !important}
+  .exp-grid{padding:20px 16px !important; gap:12px !important}
+  .proj-grid{grid-template-columns:1fr !important}
+  .cred-grid{grid-template-columns:1fr !important; gap:32px !important}
+  .hero-stats{gap:24px !important; flex-wrap:wrap}
+  .hero-pad{padding:60px 24px 40px !important}
+  .section-pad{padding:72px 24px !important}
+  .section-pad-sm{padding:40px 24px 72px !important}
+  .contact-pad{padding:72px 24px 60px !important}
+  .nav-links{display:none !important}
+  .ham-btn{display:flex !important}
+}
+@media(max-width:480px){
+  .hero-stats{gap:16px !important}
+  .modal-pad{padding:24px 20px !important}
+  .modal-arch{grid-template-columns:100px 1fr !important}
+}
+</style>
+</head>
+<body>
+<div class="scanlines"></div>
+<canvas id="hero-canvas" style="position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.6"></canvas>
+<div id="root" style="position:relative;z-index:1"></div>
+
+<script type="text/babel">
+/* ── TWEAKS ── */
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accentColor": "#e83c3c",
+  "showRadar": true,
+  "showKanji": true,
+  "bgAnim": true
+}/*EDITMODE-END*/;
+
+/* ── DATA ── */
+const me = {
+  name:"Arvind Nagaonkar", roleJP:"ネットワーク技師",
+  role:"NOC Engineer", location:"Mumbai, India",
+  email:"arvind.nagaonkar283@gmail.com", phone:"+91 9137110449", linkedin:"https://www.linkedin.com/in/arvind-nagaonkar-429a131ba/",
+  bio:"I keep global networks alive at 3 AM and build machine learning models by afternoon. NOC engineer protecting ~90 Tbps of backbone for Google, Microsoft, Amazon and Meta. Fortinet-certified. Kaggle Bronze. I move across disciplines because the best answers live at intersections.",
+};
+
+const skills = [
+  {jp:"通信",en:"Routing & Switching",pct:85,items:["BGP","OSPF","ISIS","STP/RSTP","VLANs","TCP/IP"]},
+  {jp:"防衛",en:"Security",           pct:80,items:["FortiGate v7.x","NAT","ACLs","VPN","Firewall Policy"]},
+  {jp:"基盤",en:"Platforms",          pct:78,items:["Nokia WaveSuite","Ciena MCP","Nokia NSP","HPSM","Proxmox","EVE-NG"]},
+  {jp:"工学",en:"Engineering",        pct:70,items:["Python","JavaScript","ML / CatBoost","Linear Regression","Kaggle"]},
+];
+
+const experience = [
+  {
+    chapter:"01", title:"NOC Engineer Trainee",
+    company:"Reliance Jio · ILD NOC", period:"Jan 2026 — Present",
+    points:["52+ global clients — Google, Microsoft, Amazon, Meta — across ~90 Tbps backbone","10–15+ incidents per shift at >99% SLA adherence","Lead RFO / RCA analysis for major outages","Fault localization via Nokia NSP/WaveSuite and Ciena MCP","Full lifecycle in HPSM — escalation, tracking, closure"],
+  },
+  {
+    chapter:"02", title:"NOC Intern",
+    company:"Reliance Jio · ILD NOC", period:"Jan 2025 — Jan 2026",
+    points:["24×7 IPLC/IPT international circuit operations","L1 troubleshooting and loop testing on Ciena + Nokia","HPSM ticket management with proper escalation workflows"],
+  },
+];
+
+const projects = [
+  {
+    id:"PROJ-01", title:"Virtual Network & Security Lab", tech:["Proxmox","EVE-NG","Tailscale VPN","FortiGate","Ubuntu"], year:"2026",
+    desc:"Homelab on Proxmox with 3–5 VMs and EVE-NG to simulate real-world topologies. Secure remote access via Tailscale.",
+    details:{
+      overview:"Built a fully virtualized network and security lab from scratch on a Proxmox hypervisor to practice and validate skills outside of work. The goal: replicate enterprise network conditions at home — without spending on hardware.",
+      architecture:[
+        {label:"Hypervisor",val:"Proxmox VE — bare metal virtualization hosting 3–5 VMs simultaneously"},
+        {label:"Network Sim",val:"EVE-NG Community Edition for multi-vendor router/switch topologies"},
+        {label:"Firewall",val:"FortiGate VM (eval license) — policy testing, NAT, VPN, IPS rules"},
+        {label:"Remote Access",val:"Tailscale mesh VPN — zero-trust access, no public IP, no port forwarding"},
+        {label:"OS Nodes",val:"Ubuntu Server VMs acting as end-hosts, servers, and attack simulation"},
+      ],
+      whatIBuilt:["BGP/OSPF multi-router topologies with route redistribution","VLAN segmentation and inter-VLAN routing scenarios","FortiGate firewall policies with application control and IPS","Site-to-site VPN tunnel between virtual sites","Tailscale overlay for secure remote management from anywhere"],
+      outcome:"This lab directly prepared me for NSE 4 certification and gave me hands-on confidence with firewall administration that complements my NOC work. Ongoing — continuously adding new security scenarios.",
+    },
+  },
+  {
+    id:"PROJ-02", title:"ML Dataset · Kaggle Bronze", tech:["Python","CatBoost","Pandas","Scikit-learn","Jupyter"], year:"2024–25",
+    desc:"Published a dataset on Kaggle earning a Bronze medal. Applied gradient boosting and regression — curiosity past the network perimeter.",
+    details:{
+      overview:"Stepped outside networking to publish and analyze a dataset on Kaggle. Applied machine learning techniques to extract insights, earning a Bronze medal — proof that engineering curiosity doesn't stop at the network edge.",
+      architecture:[
+        {label:"Platform",val:"Kaggle Notebooks — cloud-based Python environment"},
+        {label:"Primary Model",val:"CatBoost — gradient boosting optimized for categorical features"},
+        {label:"Baseline",val:"Linear Regression for interpretable feature correlation"},
+        {label:"Pipeline",val:"Pandas for data wrangling, Scikit-learn for preprocessing and CV"},
+        {label:"Validation",val:"K-fold cross-validation to prevent overfitting"},
+      ],
+      whatIBuilt:["Data cleaning and feature engineering pipeline in Pandas","CatBoost model with hyperparameter tuning via grid search","Linear Regression baseline for model comparison","Cross-validation framework for reliable performance metrics","Visualization of feature importance and prediction distributions"],
+      outcome:"Bronze medal recognition on Kaggle. This project demonstrated that my analytical mindset — honed in network troubleshooting — transfers well to data science. I approach both domains the same: isolate variables, test hypotheses, restore normal operation.",
+    },
+  },
+];
+
+const certs = [
+  {name:"Fortinet NSE 4", sub:"FortiGate · FortiOS 7.x · Firewall, NAT, VPN"},
+  {name:"CCNA Training",  sub:"Cisco R&S — OSPF, VLAN, STP"},
+];
+
+/* ── SCRAMBLE TEXT ── */
+const SCRAMBLE_CHARS = 'アイウエオカキクケコ#$%&@X*!?/\\01';
+function ScrambleText({ text, accent, trigger, className, style }) {
+  const [display, setDisplay] = React.useState(()=>text.split('').map(()=>SCRAMBLE_CHARS[Math.floor(Math.random()*SCRAMBLE_CHARS.length)]));
+  const locked = React.useRef(new Array(text.length).fill(false));
+  const raf = React.useRef(null);
+  const t0 = React.useRef(null);
+  const glitchTimer = React.useRef(null);
+
+  const scheduleGlitch = React.useCallback(() => {
+    glitchTimer.current = setTimeout(() => {
+      const idx = Math.floor(Math.random()*text.length);
+      setDisplay(prev => { const n=[...prev]; n[idx]=SCRAMBLE_CHARS[Math.floor(Math.random()*SCRAMBLE_CHARS.length)]; return n; });
+      setTimeout(() => { setDisplay(text.split('')); scheduleGlitch(); }, 80+Math.random()*120);
+    }, 3500+Math.random()*4000);
+  }, [text]);
+
+  React.useEffect(() => {
+    if (!trigger) return;
+    locked.current = new Array(text.length).fill(false);
+    t0.current = null;
+    const TOTAL = 1600, STEP = TOTAL / text.length;
+    function tick(ts) {
+      if (!t0.current) t0.current = ts;
+      const elapsed = ts - t0.current;
+      const lockN = Math.min(text.length, Math.floor(elapsed/STEP));
+      for (let i=0;i<lockN;i++) locked.current[i]=true;
+      setDisplay(text.split('').map((ch,i)=>locked.current[i]?ch:SCRAMBLE_CHARS[Math.floor(Math.random()*SCRAMBLE_CHARS.length)]));
+      if (lockN < text.length) { raf.current = requestAnimationFrame(tick); }
+      else { setDisplay(text.split('')); scheduleGlitch(); }
+    }
+    raf.current = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf.current); clearTimeout(glitchTimer.current); };
+  }, [trigger, text, scheduleGlitch]);
+
+  return (
+    <h1 className={className} style={style}>
+      {display.map((ch,i) => (
+        <span key={i} style={{color: locked.current[i] ? accent : `${accent}80`, display:'inline-block', transition:'color 0.06s'}}>{ch}</span>
+      ))}
+    </h1>
+  );
+}
+
+/* ── JP TOOLTIP COMPONENT ── */
+function JpWord({char, romaji, meaning, style, fontSize}){
+  return(
+    <span className="jp-tip jp" style={style}>
+      <span style={{fontSize}}>{char}</span>
+      <span className="tip-box">
+        <span className="tip-romaji">{romaji}</span>
+        <span className="tip-meaning">{meaning}</span>
+      </span>
+    </span>
+  );
+}
+
+/* ── HOOKS ── */
+function useWindowWidth() {
+  const [w,setW]=React.useState(window.innerWidth);
+  React.useEffect(()=>{const fn=()=>setW(window.innerWidth);window.addEventListener('resize',fn);return()=>window.removeEventListener('resize',fn)},[]);
+  return w;
+}
+
+function useReveal(ref, delay=0) {
+  React.useEffect(()=>{
+    if(!ref.current) return;
+    const el=ref.current;
+    el.style.transitionDelay=`${delay}ms`;
+    const obs=new IntersectionObserver(([e])=>{if(e.isIntersecting){el.classList.add('in');obs.disconnect()}},{threshold:0.12});
+    obs.observe(el);
+    return()=>obs.disconnect();
+  },[]);
+}
+
+/* ── CANVAS ── */
+function initHeroCanvas(accent, enabled) {
+  const canvas=document.getElementById('hero-canvas');
+  if(!canvas) return ()=>{};
+  if(!enabled){canvas.style.opacity='0';return ()=>{};}
+  canvas.style.opacity='0.6';
+  const ctx=canvas.getContext('2d');
+  let W,H,nodes=[],dataStreams=[],raf;
+  const hexToRgb=h=>({r:parseInt(h.slice(1,3),16),g:parseInt(h.slice(3,5),16),b:parseInt(h.slice(5,7),16)});
+  function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight;}
+  resize();
+  window.addEventListener('resize',resize);
+
+  nodes=Array.from({length:34},()=>({
+    x:Math.random()*W, y:Math.random()*H,
+    vx:(Math.random()-0.5)*0.18, vy:(Math.random()-0.5)*0.18,
+    r:Math.random()*1.8+0.8, pulse:Math.random()*Math.PI*2,
+  }));
+
+  const CHARS='01アイウエオカキクケコ ABCDEF0123456789';
+  dataStreams=Array.from({length:12},(_,i)=>({
+    x:W*0.52+i*48+Math.random()*16,
+    drops:Array.from({length:7},()=>({y:Math.random()*H,speed:0.35+Math.random()*0.55,char:CHARS[Math.floor(Math.random()*CHARS.length)],opacity:0.06+Math.random()*0.09,t:Math.random()*60})),
+  }));
+
+  const ac=hexToRgb(accent);
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+
+    // Hex grid — right half only
+    ctx.strokeStyle=`rgba(${ac.r},${ac.g},${ac.b},0.05)`;
+    ctx.lineWidth=0.5;
+    const hs=38;
+    for(let row=0;row<H/hs+2;row++){
+      for(let col=0;col<W/hs+2;col++){
+        const cx=col*hs*1.732+(row%2)*hs*0.866, cy=row*hs*1.5;
+        if(cx<W*0.28) continue;
+        ctx.beginPath();
+        for(let i=0;i<6;i++){const a=(Math.PI/3)*i-Math.PI/6;i===0?ctx.moveTo(cx+hs*0.82*Math.cos(a),cy+hs*0.82*Math.sin(a)):ctx.lineTo(cx+hs*0.82*Math.cos(a),cy+hs*0.82*Math.sin(a));}
+        ctx.closePath();ctx.stroke();
+      }
+    }
+
+    // Data streams
+    dataStreams.forEach(s=>s.drops.forEach(d=>{
+      d.y+=d.speed; d.t--;
+      if(d.t<=0){d.char=CHARS[Math.floor(Math.random()*CHARS.length)];d.t=25+Math.random()*70;}
+      if(d.y>H) d.y=-16;
+      ctx.fillStyle=`rgba(${ac.r},${ac.g},${ac.b},${d.opacity})`;
+      ctx.font='11px JetBrains Mono,monospace';
+      ctx.fillText(d.char,s.x,d.y);
+    }));
+
+    // ── CONNECTION LINES — brighter, longer reach ──
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<180){
+          const alpha=(1-d/180)*0.55;
+          ctx.strokeStyle=`rgba(${ac.r},${ac.g},${ac.b},${alpha})`;
+          ctx.lineWidth=0.7;
+          ctx.beginPath();ctx.moveTo(nodes[i].x,nodes[i].y);ctx.lineTo(nodes[j].x,nodes[j].y);ctx.stroke();
+        }
+      }
+    }
+
+    // Nodes with glow
+    nodes.forEach(n=>{
+      n.x+=n.vx;n.y+=n.vy;n.pulse+=0.02;
+      if(n.x<0||n.x>W)n.vx*=-1;if(n.y<0||n.y>H)n.vy*=-1;
+      const p=0.5+0.5*Math.sin(n.pulse);
+      // glow ring
+      ctx.strokeStyle=`rgba(${ac.r},${ac.g},${ac.b},${0.15*p})`;
+      ctx.lineWidth=0.8;
+      ctx.beginPath();ctx.arc(n.x,n.y,n.r*4,0,Math.PI*2);ctx.stroke();
+      // core
+      ctx.fillStyle=`rgba(${ac.r},${ac.g},${ac.b},${0.55+p*0.45})`;
+      ctx.beginPath();ctx.arc(n.x,n.y,n.r*(1+p*0.4),0,Math.PI*2);ctx.fill();
+    });
+
+    raf=requestAnimationFrame(draw);
+  }
+  draw();
+  return()=>{cancelAnimationFrame(raf);window.removeEventListener('resize',resize);};
+}
+
+/* ── TERMINAL ANIMATION ── */
+const TERMINAL_SEQUENCE = [
+  {type:'prompt', text:'ping -c 4 8.8.8.8'},
+  {type:'output', text:'PING 8.8.8.8 (8.8.8.8) 56(84) bytes of data.'},
+  {type:'output', text:'64 bytes from 8.8.8.8: icmp_seq=1 ttl=116 time=4.2 ms', delay:420},
+  {type:'output', text:'64 bytes from 8.8.8.8: icmp_seq=2 ttl=116 time=3.8 ms', delay:420},
+  {type:'output', text:'64 bytes from 8.8.8.8: icmp_seq=3 ttl=116 time=4.1 ms', delay:420},
+  {type:'output', text:'64 bytes from 8.8.8.8: icmp_seq=4 ttl=116 time=4.3 ms', delay:420},
+  {type:'success', text:'4 packets transmitted, 4 received, 0% loss, time 3003ms'},
+  {type:'gap'},
+  {type:'prompt', text:'ip route show'},
+  {type:'output', text:'default via 192.168.1.1 dev eth0 proto dhcp metric 100'},
+  {type:'output', text:'10.0.0.0/8 dev tun0 proto kernel scope link'},
+  {type:'output', text:'172.16.0.0/12 via 172.16.1.1 dev bond0 proto bgp'},
+  {type:'output', text:'192.168.1.0/24 dev eth0 scope link src 192.168.1.42'},
+  {type:'gap'},
+  {type:'prompt', text:'ss -tuln | grep LISTEN'},
+  {type:'output', text:'tcp  LISTEN 0  128  0.0.0.0:22    0.0.0.0:*'},
+  {type:'output', text:'tcp  LISTEN 0  128  0.0.0.0:443   0.0.0.0:*'},
+  {type:'output', text:'tcp  LISTEN 0  128  127.0.0.1:53  0.0.0.0:*'},
+  {type:'output', text:'udp  UNCONN 0  0    0.0.0.0:161   0.0.0.0:*'},
+  {type:'gap'},
+  {type:'prompt', text:'uptime'},
+  {type:'success', text:' 09:47:21 up 47 days,  6:13,  2 users,  load average: 0.08, 0.12'},
+  {type:'cursor'},
+];
+
+function TerminalAnim({accent}){
+  const [lines, setLines] = React.useState([]);
+  const [typing, setTyping] = React.useState('');
+  const scrollRef = React.useRef();
+
+  React.useEffect(()=>{
+    let cancelled = false;
+    let lineIdx = 0;
+
+    async function sleep(ms){ return new Promise(r=>setTimeout(r,ms)); }
+
+    async function typePrompt(text){
+      for(let i=0;i<=text.length;i++){
+        if(cancelled) return;
+        setTyping(text.slice(0,i));
+        await sleep(28 + Math.random()*18);
+      }
+    }
+
+    async function run(){
+      await sleep(600);
+      while(!cancelled){
+        for(const item of TERMINAL_SEQUENCE){
+          if(cancelled) return;
+          if(item.type==='gap'){ setLines(l=>[...l,{type:'gap',id:lineIdx++}]); await sleep(180); continue; }
+          if(item.type==='cursor'){
+            setTyping('');
+            await sleep(1800);
+            if(!cancelled) setLines([]);
+            break;
+          }
+          if(item.type==='prompt'){
+            setTyping('');
+            await typePrompt(item.text);
+            if(cancelled) return;
+            setLines(l=>[...l,{type:'prompt',text:item.text,id:lineIdx++}]);
+            setTyping('');
+            await sleep(120);
+          } else {
+            await sleep(item.delay||60);
+            if(cancelled) return;
+            setLines(l=>[...l,{type:item.type,text:item.text,id:lineIdx++}]);
+            if(scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+          }
+        }
+      }
+    }
+    run();
+    return()=>{ cancelled=true; };
+  },[]);
+
+  React.useEffect(()=>{
+    if(scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  },[lines]);
+
+  const col = {
+    prompt: '#e8e0d0',
+    output:  '#6a7a8a',
+    success: accent,
+    gap:     'transparent',
+  };
+
+  return(
+    <div style={{width:320,background:'#06060f',border:`1px solid ${accent}30`,fontFamily:'JetBrains Mono',fontSize:11,position:'relative',overflow:'hidden'}}>
+      {/* scanlines */}
+      <div style={{position:'absolute',inset:0,background:'repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.07) 2px,rgba(0,0,0,0.07) 4px)',pointerEvents:'none',zIndex:5}}></div>
+      {/* Title bar */}
+      <div style={{padding:'8px 14px',borderBottom:`1px solid ${accent}18`,display:'flex',alignItems:'center',gap:10,background:'#08080f'}}>
+        <div style={{display:'flex',gap:6}}>
+          {['#ff5f57','#febc2e','#28c840'].map((c,i)=><div key={i} style={{width:8,height:8,borderRadius:'50%',background:c,opacity:0.7}}></div>)}
+        </div>
+        <span style={{fontSize:9,color:'#3a3a52',letterSpacing:2,flex:1,textAlign:'center'}}>NOC_TERMINAL — arvind@jio-ild</span>
+      </div>
+      {/* Output */}
+      <div ref={scrollRef} style={{padding:'14px',height:248,overflowY:'auto',display:'flex',flexDirection:'column',gap:3}}>
+        {lines.map(line=>(
+          line.type==='gap'
+            ? <div key={line.id} style={{height:6}}/>
+            : <div key={line.id} style={{color:col[line.type]||col.output,lineHeight:1.6,letterSpacing:0.5}}>
+                {line.type==='prompt' && <span style={{color:accent,marginRight:8}}>$</span>}
+                {line.type==='success' && <span style={{color:accent,marginRight:8}}>✓</span>}
+                {line.text}
+              </div>
+        ))}
+        {/* Active typing line */}
+        {typing!==undefined && (
+          <div style={{color:col.prompt,lineHeight:1.6}}>
+            <span style={{color:accent,marginRight:8}}>$</span>
+            {typing}<span style={{animation:'blipPulse 0.8s infinite',display:'inline-block',width:7,height:12,background:accent,marginLeft:1,verticalAlign:'text-bottom'}}></span>
+          </div>
+        )}
+      </div>
+      {/* Bottom bar */}
+      <div style={{padding:'6px 14px',borderTop:`1px solid ${accent}15`,display:'flex',justifyContent:'space-between'}}>
+        <span style={{fontSize:9,color:'#2a2a3a',letterSpacing:1}}>JIO-ILD · LIVE</span>
+        <span style={{fontSize:9,color:accent,letterSpacing:1,animation:'blipPulse 2s infinite'}}>● CONNECTED</span>
+      </div>
+      {/* Corner brackets */}
+      {[[0,0],[1,0],[0,1],[1,1]].map(([rx,ry],i)=>(
+        <div key={i} style={{position:'absolute',width:10,height:10,top:ry?undefined:0,bottom:ry?0:undefined,left:rx?undefined:0,right:rx?0:undefined,
+          borderTop:!ry?`1px solid ${accent}50`:undefined,borderBottom:ry?`1px solid ${accent}50`:undefined,
+          borderLeft:!rx?`1px solid ${accent}50`:undefined,borderRight:rx?`1px solid ${accent}50`:undefined}}></div>
+      ))}
+    </div>
+  );
+}
+
+/* ── RADAR ── */
+function Radar({accent}){
+  const cx=120,cy=120;
+  const dots=[{r:38,a:40},{r:62,a:130},{r:80,a:200},{r:45,a:290},{r:70,a:75},{r:55,a:330}];
+  return(
+    <svg viewBox="0 0 240 240" width="300" height="300">
+      <defs>
+        <radialGradient id="rg2"><stop offset="0%" stopColor={accent} stopOpacity="0.1"/><stop offset="100%" stopColor={accent} stopOpacity="0"/></radialGradient>
+        <filter id="glow2"><feGaussianBlur stdDeviation="2.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+      </defs>
+      <circle cx={cx} cy={cy} r="110" fill="url(#rg2)"/>
+      {[30,60,90,110].map(r=><circle key={r} cx={cx} cy={cy} r={r} fill="none" stroke={accent} strokeWidth="0.5" strokeOpacity="0.2"/>)}
+      {[0,45,90,135].map(a=>{const rad=a*Math.PI/180;return<line key={a} x1={cx-Math.cos(rad)*110} y1={cy-Math.sin(rad)*110} x2={cx+Math.cos(rad)*110} y2={cy+Math.sin(rad)*110} stroke={accent} strokeWidth="0.4" strokeOpacity="0.15"/>})}
+      <g style={{transformOrigin:`${cx}px ${cy}px`,animation:'radarSpin 4s linear infinite'}}>
+        <path d={`M${cx},${cy} L${cx},${cy-110} A110,110 0 0,1 ${cx+110*Math.sin(Math.PI/3)},${cy-110*Math.cos(Math.PI/3)} Z`} fill="url(#rg2)" opacity="0.7"/>
+        <line x1={cx} y1={cy} x2={cx} y2={cy-110} stroke={accent} strokeWidth="1.2" strokeOpacity="0.8" filter="url(#glow2)"/>
+      </g>
+      {dots.map((d,i)=>{const rad=d.a*Math.PI/180,x=cx+d.r*Math.cos(rad),y=cy+d.r*Math.sin(rad);return(<g key={i} filter="url(#glow2)"><circle cx={x} cy={y} r="3" fill={accent} opacity="0.9"/><circle cx={x} cy={y} r="7" fill="none" stroke={accent} strokeWidth="0.6" opacity="0.3"/></g>)})}
+      {[[10,10],[230,10],[10,230],[230,230]].map(([x,y],i)=>{const sx=x<120?1:-1,sy=y<120?1:-1;return(<g key={i} stroke={accent} strokeWidth="1.5" strokeOpacity="0.5" fill="none"><polyline points={`${x+sx*14},${y} ${x},${y} ${x},${y+sy*14}`}/></g>)})}
+      <text x="196" y="234" fontFamily="JetBrains Mono" fontSize="6" fill={accent} fillOpacity="0.5">SCAN_ACTIVE</text>
+    </svg>
+  );
+}
+
+/* ── NAV ── */
+function Nav({accent}){
+  const [scrolled,setScrolled]=React.useState(false);
+  const [menuOpen,setMenuOpen]=React.useState(false);
+  const w=useWindowWidth();
+  const isMobile=w<=768;
+  React.useEffect(()=>{
+    const fn=()=>setScrolled(window.scrollY>40);
+    window.addEventListener('scroll',fn);
+    return()=>window.removeEventListener('scroll',fn);
+  },[]);
+  const navLinks=['about','skills','experience','projects','contact'];
+  const scrollTo=(id)=>{
+    const el=document.getElementById(id);
+    if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+  };
+  const handleLink=(id,e)=>{
+    e.preventDefault();
+    setMenuOpen(false);
+    setTimeout(()=>scrollTo(id),320);
+  };
+  const handleDesktopLink=(id,e)=>{
+    e.preventDefault();
+    scrollTo(id);
+  };
+  return(
+    <>
+      <nav style={{position:'fixed',top:0,left:0,right:0,zIndex:500,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 48px',height:56,background:scrolled||menuOpen?'rgba(8,8,13,0.97)':'transparent',backdropFilter:scrolled||menuOpen?'blur(16px)':'none',borderBottom:scrolled||menuOpen?'1px solid #1e1e2e':'1px solid transparent',transition:'all 0.35s'}}>
+        <div style={{display:'flex',alignItems:'center',gap:12}}>
+          <span className="display" style={{fontSize:22,color:accent,letterSpacing:2}}>AN</span>
+          <span className="mono" style={{fontSize:10,color:'#3a3a4e',letterSpacing:1}}>//NOC_ENGINEER</span>
+        <a href={me.linkedin} target="_blank" rel="noopener noreferrer" style={{marginLeft:16,display:'flex',alignItems:'center',gap:6,textDecoration:'none',opacity:0.5,transition:'opacity 0.2s'}} onMouseEnter={e=>e.currentTarget.style.opacity='1'} onMouseLeave={e=>e.currentTarget.style.opacity='0.5'}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+          <span className="mono" style={{fontSize:9,color:accent,letterSpacing:2}}>LINKEDIN</span>
+        </a>
+        </div>
+        {/* Desktop links */}
+        <div className="nav-links" style={{display:isMobile?'none':'flex',gap:32}}>
+          {navLinks.map(s=>(
+            <a key={s} href={`#${s}`} onClick={e=>handleDesktopLink(s,e)} className="mono" style={{fontSize:11,color:'#5a5a7a',textDecoration:'none',letterSpacing:2,textTransform:'uppercase',transition:'color 0.2s'}}
+              onMouseEnter={e=>e.target.style.color=accent} onMouseLeave={e=>e.target.style.color='#5a5a7a'}>{s}</a>
+          ))}
+        </div>
+        {/* Hamburger */}
+        <button className={`ham-btn${menuOpen?' ham-open':''}`} onClick={()=>setMenuOpen(v=>!v)}
+          style={{display:isMobile?'flex':'none',flexDirection:'column',gap:5.5,background:'none',border:'none',cursor:'pointer',padding:'4px',zIndex:510}}>
+          <span className="ham-line"></span>
+          <span className="ham-line"></span>
+          <span className="ham-line"></span>
+        </button>
+      </nav>
+      {/* Mobile dropdown */}
+      <div className={`mobile-menu${menuOpen?' open':''}`}>
+        {navLinks.map(s=>(
+          <a key={s} href={`#${s}`} onClick={e=>handleLink(s,e)} className="mono" style={{fontSize:16,color:'#9a9aaa',textDecoration:'none',letterSpacing:3,textTransform:'uppercase',padding:'8px 0',borderBottom:'1px solid #12121c',transition:'color 0.2s'}}
+            onMouseEnter={e=>e.target.style.color=accent} onMouseLeave={e=>e.target.style.color='#9a9aaa'}>{s}</a>
+        ))}
+        <div style={{marginTop:8,paddingTop:16}}>
+          <div className="mono" style={{fontSize:10,color:'#3a3a52',letterSpacing:2,marginBottom:4}}>{me.email}</div>
+          <div className="mono" style={{fontSize:10,color:'#3a3a52',letterSpacing:2}}>{me.phone}</div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ── HERO ── */
+function Hero({accent,showRadar}){
+  const [in_,setIn]=React.useState(false);
+  React.useEffect(()=>{setTimeout(()=>setIn(true),100)},[]);
+  const a=(d)=>({opacity:in_?1:0,transform:in_?'none':'translateY(28px)',transition:`opacity 0.9s ${d}ms,transform 0.9s ${d}ms`});
+  return(
+    <section id="about" className="hero-pad" style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',gap:'clamp(64px,8vw,120px)',padding:'60px 48px 40px',position:'relative',overflow:'hidden'}}>
+      <div style={{position:'absolute',inset:0,background:'repeating-conic-gradient(from 0deg at 110% 50%,transparent 0deg,rgba(232,60,60,0.01) 0.25deg,transparent 0.5deg)',pointerEvents:'none'}}></div>
+      <div style={{position:'relative',zIndex:2,flex:1,maxWidth:600}}>
+        <div style={{...a(0),marginBottom:24}}>
+          <span className="mono" style={{fontSize:11,color:'#5a5a7a',letterSpacing:3}}>{me.role.toUpperCase()} · {me.location.toUpperCase()}</span>
+        </div>
+        <div style={a(120)}>
+          <h1 className="display" style={{fontSize:'clamp(60px,9vw,140px)',color:'#e8e0d0',lineHeight:0.92,letterSpacing:4}}>{me.name.split(' ')[0].toUpperCase()}</h1>
+          <ScrambleText
+            text={me.name.split(' ')[1].toUpperCase()}
+            accent={accent}
+            trigger={in_}
+            className="display"
+            style={{fontSize:'clamp(60px,9vw,140px)',lineHeight:0.92,letterSpacing:4}}
+          />
+        </div>
+        <div style={{...a(240),display:'flex',alignItems:'center',gap:16,margin:'8px 0 16px'}}>
+          <div style={{width:32,height:1,background:accent}}></div>
+          <JpWord char={me.roleJP} romaji="Nettowāku Gishi" meaning="Network Engineer" style={{fontSize:13,color:'#5a5a7a',letterSpacing:4}} />
+        </div>
+        <p style={{...a(360),maxWidth:520,fontSize:15,color:'#9a8e80',lineHeight:1.85,marginBottom:24}}>{me.bio}</p>
+        <div style={{...a(480),display:'flex',gap:16,flexWrap:'wrap'}}>
+          <a href="#experience" style={{padding:'13px 32px',background:accent,color:'#fff',fontWeight:600,fontSize:13,textDecoration:'none',letterSpacing:1,clipPath:'polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px))',transition:'opacity 0.2s'}}
+            onMouseEnter={e=>e.currentTarget.style.opacity='0.85'} onMouseLeave={e=>e.currentTarget.style.opacity='1'}>MISSION LOG</a>
+          <a href={`mailto:${me.email}`} style={{padding:'13px 32px',border:'1px solid #2a2a3e',color:'#7a7a9a',fontWeight:500,fontSize:13,textDecoration:'none',letterSpacing:1,transition:'all 0.2s'}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=accent;e.currentTarget.style.color=accent}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#2a2a3e';e.currentTarget.style.color='#7a7a9a'}}>CONTACT</a>
+        </div>
+        <div className="hero-stats" style={{...a(600),display:'flex',gap:48,marginTop:32,paddingTop:20,borderTop:'1px solid #1a1a28'}}>
+          {[{v:"~90 Tbps",l:"Backbone"},{v:">99%",l:"SLA adherence"},{v:"52+",l:"Global clients"},{v:"NSE 4",l:"Fortinet"}].map(s=>(
+            <div key={s.l}>
+              <div className="display" style={{fontSize:'clamp(20px,2.5vw,36px)',color:accent,letterSpacing:2}}>{s.v}</div>
+              <div className="mono" style={{fontSize:10,color:'#3a3a52',letterSpacing:1,marginTop:4,textTransform:'uppercase'}}>{s.l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="radar-wrap" style={{...a(200),opacity:in_?1:0,transition:'opacity 1.2s 300ms',position:'relative',zIndex:2,flexShrink:0}}>
+        <TerminalAnim accent={accent}/>
+      </div>
+      <div style={{position:'absolute',bottom:32,left:48,display:'flex',alignItems:'center',gap:10,zIndex:2}}>
+        <div style={{width:1,height:40,background:`linear-gradient(to bottom,transparent,${accent})`}}></div>
+        <span className="mono" style={{fontSize:10,color:'#3a3a52',letterSpacing:2}}>SCROLL</span>
+      </div>
+    </section>
+  );
+}
+
+/* ── CHAPTER HEAD ── */
+function ChapterHead({num,en,jp,accent,showKanji}){
+  const ref=React.useRef(); useReveal(ref);
+  return(
+    <div ref={ref} className="reveal" style={{marginBottom:56,position:'relative'}}>
+      {showKanji&&<span className="jp" title={jp} style={{position:'absolute',left:-8,top:-40,fontSize:110,fontWeight:300,color:`${accent}07`,lineHeight:1,userSelect:'none',pointerEvents:'none'}}>{jp}</span>}
+      <div className="chapter-mark" style={{'--acc':accent}}>
+        <span className="mono" style={{fontSize:10,color:accent,letterSpacing:3}}>CHAPTER {num}</span>
+      </div>
+      <h2 className="display" style={{fontSize:'clamp(32px,5vw,64px)',color:'#e8e0d0',letterSpacing:4,lineHeight:1}}>{en.toUpperCase()}</h2>
+    </div>
+  );
+}
+
+function SmallChapterHead({num,en,accent}){
+  const ref=React.useRef(); useReveal(ref);
+  return(
+    <div ref={ref} className="reveal" style={{marginBottom:32,position:'relative',overflow:'hidden'}}>
+      <div className="chapter-mark" style={{'--acc':accent}}>
+        <span className="mono" style={{fontSize:10,color:accent,letterSpacing:3}}>CHAPTER {num}</span>
+      </div>
+      <h2 className="display" style={{fontSize:'clamp(24px,3vw,40px)',color:'#e8e0d0',letterSpacing:3,lineHeight:1}}>{en.toUpperCase()}</h2>
+    </div>
+  );
+}
+
+/* ── SKILL BAR ── */
+function SkillBar({pct,accent,visible}){
+  return(
+    <div style={{height:2,background:'#1a1a28',marginTop:16,marginBottom:4,position:'relative',overflow:'hidden'}}>
+      <div style={{position:'absolute',left:0,top:0,height:'100%',background:accent,width:`${pct}%`,transform:visible?'scaleX(1)':'scaleX(0)',transformOrigin:'left',transition:'transform 1.2s cubic-bezier(0.16,1,0.3,1)',transitionDelay:'0.2s',boxShadow:`0 0 8px ${accent}80`}}></div>
+    </div>
+  );
+}
+
+/* ── SKILLS ── */
+function Skills({accent,showKanji}){
+  const [vis,setVis]=React.useState([false,false,false,false]);
+  const refs=[React.useRef(),React.useRef(),React.useRef(),React.useRef()];
+  React.useEffect(()=>{
+    refs.forEach((r,i)=>{
+      if(!r.current) return;
+      const obs=new IntersectionObserver(([e])=>{if(e.isIntersecting){r.current.classList.add('in');setVis(v=>{const n=[...v];n[i]=true;return n});obs.disconnect()}},{threshold:0.12});
+      obs.observe(r.current);
+    });
+  },[]);
+  return(
+    <section id="skills" className="section-pad" style={{padding:'80px 48px',maxWidth:1200,margin:'0 auto',position:'relative'}}>
+      <ChapterHead num="02" en="Capabilities" jp="技術" accent={accent} showKanji={showKanji}/>
+      <div className="skills-grid" style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(240px,1fr))',gap:2}}>
+        {skills.map((s,i)=>(
+          <div key={i} ref={refs[i]} className="panel reveal" style={{padding:'32px 28px',background:i%2===0?'#0d0d16':'#0a0a12',transition:'border-color 0.3s,box-shadow 0.3s,opacity 0.7s,transform 0.7s',transitionDelay:`${i*80}ms`}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=`${accent}50`;e.currentTarget.style.boxShadow=`inset 0 0 40px ${accent}06`}}
+            onMouseLeave={e=>{e.currentTarget.style.borderColor='#1e1e2e';e.currentTarget.style.boxShadow='none'}}>
+            <div style={{display:'flex',alignItems:'baseline',gap:10,marginBottom:8}}>
+              <JpWord char={s.jp} romaji={['Tsūshin','Bōei','Kiban','Kōgaku'][i]} meaning={['Telecommunications','Defense / Security','Infrastructure','Engineering'][i]} style={{fontSize:28,color:accent,opacity:0.7,fontWeight:300}} />
+              <span className="mono" style={{fontSize:9,color:'#3a3a52',letterSpacing:2,textTransform:'uppercase'}}>{s.en}</span>
+            </div>
+            <div style={{height:1,background:`${accent}20`,margin:'16px 0 20px'}}></div>
+            <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+              {s.items.map((item,j)=>(
+                <span key={item} className="mono" style={{padding:'5px 11px',fontSize:11,border:`1px solid ${accent}28`,color:`${accent}cc`,background:`${accent}08`,transition:'all 0.2s',transitionDelay:`${j*40}ms`,opacity:vis[i]?1:0,transform:vis[i]?'none':'translateY(8px)'}}
+                  onMouseEnter={e=>{e.currentTarget.style.background=`${accent}20`;e.currentTarget.style.borderColor=`${accent}60`}}
+                  onMouseLeave={e=>{e.currentTarget.style.background=`${accent}08`;e.currentTarget.style.borderColor=`${accent}28`}}
+                >{item}</span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/* ── EXPERIENCE ── */
+function Experience({accent,showKanji}){
+  const [expanded,setExpanded]=React.useState(null);
+  return(
+    <section id="experience" className="section-pad" style={{padding:'80px 48px',position:'relative'}}>
+      <div style={{maxWidth:1200,margin:'0 auto'}}>
+        <ChapterHead num="03" en="Mission Log" jp="経験" accent={accent} showKanji={showKanji}/>
+        <div style={{display:'flex',flexDirection:'column',gap:2}}>
+          {experience.map((e,i)=>{
+            const isOpen=expanded===i;
+            const ref=React.useRef(); useReveal(ref,i*150);
+            return(
+              <div key={i} ref={ref} className="panel reveal" style={{background:'#0d0d16',cursor:'pointer',transition:'border-color 0.3s,box-shadow 0.3s'}}
+                onClick={()=>setExpanded(isOpen?null:i)}
+                onMouseEnter={ev=>ev.currentTarget.style.borderColor=`${accent}40`}
+                onMouseLeave={ev=>ev.currentTarget.style.borderColor='#1e1e2e'}>
+                <div className="exp-grid" style={{padding:'32px 40px',display:'grid',gridTemplateColumns:'auto 1fr auto',gap:24,alignItems:'center'}}>
+                  <span className="display" style={{fontSize:'clamp(36px,4vw,56px)',color:`${accent}25`,letterSpacing:2,lineHeight:1}}>{e.chapter}</span>
+                  <div>
+                    <div style={{fontSize:'clamp(15px,1.8vw,18px)',fontWeight:600,color:'#e8e0d0',marginBottom:4}}>{e.title}</div>
+                    <div className="mono" style={{fontSize:11,color:accent}}>{e.company}</div>
+                    <div className="mono" style={{fontSize:10,color:'#3a3a52',marginTop:4,letterSpacing:1}}>{e.period}</div>
+                  </div>
+                  <div style={{width:28,height:28,border:`1px solid ${accent}40`,display:'flex',alignItems:'center',justifyContent:'center',color:accent,fontSize:14,transition:'transform 0.3s',transform:isOpen?'rotate(45deg)':'none',flexShrink:0}}>+</div>
+                </div>
+                <div style={{maxHeight:isOpen?'400px':'0',overflow:'hidden',transition:'max-height 0.5s cubic-bezier(0.16,1,0.3,1)'}}>
+                  <div style={{padding:'0 40px 32px',borderTop:`1px solid ${accent}15`}}>
+                    <ul style={{listStyle:'none',display:'flex',flexDirection:'column',gap:12,paddingTop:24}}>
+                      {e.points.map((p,j)=>(
+                        <li key={j} style={{display:'flex',gap:14,alignItems:'flex-start',opacity:isOpen?1:0,transform:isOpen?'none':'translateX(-12px)',transition:`opacity 0.4s ${j*60}ms,transform 0.4s ${j*60}ms`}}>
+                          <span style={{color:accent,fontSize:11,marginTop:3,flexShrink:0,fontFamily:'JetBrains Mono'}}>▸</span>
+                          <span style={{fontSize:13,color:'#7a7a9a',lineHeight:1.7}}>{p}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ── PROJECT MODAL ── */
+function ProjectModal({project,accent,onClose}){
+  React.useEffect(()=>{
+    const fn=(e)=>{if(e.key==='Escape')onClose()};
+    document.addEventListener('keydown',fn);
+    document.body.style.overflow='hidden';
+    return()=>{document.removeEventListener('keydown',fn);document.body.style.overflow='';};
+  },[]);
+  const {details,title,id,tech,year}=project;
+  return(
+    <div style={{position:'fixed',inset:0,zIndex:900,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px',animation:'backdropIn 0.3s ease'}} onClick={e=>{if(e.target===e.currentTarget)onClose()}}>
+      <div style={{position:'absolute',inset:0,background:'rgba(4,4,8,0.93)',backdropFilter:'blur(12px)'}}></div>
+      <div style={{position:'relative',width:'100%',maxWidth:860,maxHeight:'90vh',overflow:'auto',background:'#0d0d18',border:`1px solid ${accent}30`,animation:'modalIn 0.4s cubic-bezier(0.16,1,0.3,1)'}}>
+        <div style={{padding:'20px 32px',borderBottom:`1px solid ${accent}20`,display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,background:'#0d0d18',zIndex:10}}>
+          <div style={{display:'flex',alignItems:'center',gap:16}}>
+            <span className="mono" style={{fontSize:10,color:accent,letterSpacing:3}}>{id}</span>
+            <div style={{width:1,height:20,background:'#2a2a3e'}}></div>
+            <span className="mono" style={{fontSize:10,color:'#3a3a52',letterSpacing:2}}>{year}</span>
+          </div>
+          <button onClick={onClose} style={{background:'none',border:`1px solid ${accent}30`,color:accent,width:32,height:32,cursor:'pointer',fontSize:14,transition:'all 0.2s',display:'flex',alignItems:'center',justifyContent:'center'}}
+            onMouseEnter={e=>e.currentTarget.style.background=`${accent}20`} onMouseLeave={e=>e.currentTarget.style.background='none'}>✕</button>
+        </div>
+        <div className="modal-pad" style={{padding:'40px 32px'}}>
+          <h2 className="display" style={{fontSize:'clamp(24px,4vw,48px)',color:'#e8e0d0',letterSpacing:3,marginBottom:8}}>{title.toUpperCase()}</h2>
+          <div style={{width:48,height:2,background:accent,marginBottom:28}}></div>
+          <p style={{fontSize:14,color:'#8a8090',lineHeight:1.85,marginBottom:40}}>{details.overview}</p>
+          <div style={{marginBottom:40}}>
+            <div className="mono" style={{fontSize:10,color:accent,letterSpacing:3,marginBottom:16}}>ARCHITECTURE</div>
+            <div style={{display:'flex',flexDirection:'column',gap:0}}>
+              {details.architecture.map((a,i)=>(
+                <div key={i} className="modal-arch" style={{display:'grid',gridTemplateColumns:'140px 1fr',gap:0,borderBottom:'1px solid #141420'}}>
+                  <div className="mono" style={{fontSize:10,color:'#4a4a62',letterSpacing:1,padding:'12px 16px 12px 0',borderRight:`1px solid ${accent}15`}}>{a.label.toUpperCase()}</div>
+                  <div style={{fontSize:13,color:'#7a7a9a',padding:'12px 0 12px 16px',lineHeight:1.6}}>{a.val}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{marginBottom:40}}>
+            <div className="mono" style={{fontSize:10,color:accent,letterSpacing:3,marginBottom:16}}>WHAT I BUILT</div>
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              {details.whatIBuilt.map((w,i)=>(
+                <div key={i} style={{display:'flex',gap:14,alignItems:'flex-start'}}>
+                  <span style={{color:accent,fontSize:10,marginTop:4,flexShrink:0,fontFamily:'JetBrains Mono'}}>▸</span>
+                  <span style={{fontSize:13,color:'#7a7a9a',lineHeight:1.7}}>{w}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{background:`${accent}08`,border:`1px solid ${accent}20`,padding:'24px',position:'relative'}}>
+            <div style={{position:'absolute',top:-1,left:24,background:'#0d0d18',padding:'0 8px'}}>
+              <span className="mono" style={{fontSize:9,color:accent,letterSpacing:3}}>OUTCOME</span>
+            </div>
+            <p style={{fontSize:13,color:'#9a8e80',lineHeight:1.8}}>{details.outcome}</p>
+          </div>
+          <div style={{display:'flex',flexWrap:'wrap',gap:8,marginTop:32,paddingTop:24,borderTop:'1px solid #141420'}}>
+            {tech.map(t=><span key={t} className="mono" style={{padding:'6px 14px',fontSize:11,border:`1px solid ${accent}30`,color:accent,background:`${accent}0a`}}>{t}</span>)}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── PROJECTS ── */
+function Projects({accent,showKanji}){
+  const [modal,setModal]=React.useState(null);
+  return(
+    <section id="projects" className="section-pad" style={{padding:'100px 48px',maxWidth:1200,margin:'0 auto'}}>
+      <ChapterHead num="04" en="Projects" jp="計画" accent={accent} showKanji={showKanji}/>
+      <div className="proj-grid" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:2}}>
+        {projects.map((p,i)=>{
+          const ref=React.useRef(); useReveal(ref,i*120);
+          return(
+            <div key={i} ref={ref} className="panel reveal" style={{background:'#0d0d16',padding:'40px',display:'flex',flexDirection:'column',gap:20,cursor:'pointer',transition:'border-color 0.3s,transform 0.3s,box-shadow 0.3s'}}
+              onClick={()=>setModal(p)}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=`${accent}50`;e.currentTarget.style.transform='translateY(-4px)';e.currentTarget.style.boxShadow=`0 16px 40px rgba(0,0,0,0.4),0 0 20px ${accent}15`}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor='#1e1e2e';e.currentTarget.style.transform='translateY(0)';e.currentTarget.style.boxShadow='none'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                <span className="mono" style={{fontSize:10,color:'#3a3a52',letterSpacing:2}}>{p.id}</span>
+                <div style={{display:'flex',alignItems:'center',gap:8}}>
+                  <span className="mono" style={{fontSize:9,color:'#3a3a52'}}>{p.year}</span>
+                  <div style={{width:20,height:20,border:`1px solid ${accent}40`,display:'flex',alignItems:'center',justifyContent:'center',color:accent,fontSize:10}}>↗</div>
+                </div>
+              </div>
+              <div style={{width:40,height:2,background:accent}}></div>
+              <h3 style={{fontSize:'clamp(16px,1.8vw,20px)',fontWeight:600,color:'#e8e0d0',lineHeight:1.3}}>{p.title}</h3>
+              <p style={{fontSize:13,color:'#7a7a9a',lineHeight:1.8,flexGrow:1}}>{p.desc}</p>
+              <div style={{display:'flex',flexWrap:'wrap',gap:8,paddingTop:16,borderTop:'1px solid #1a1a28'}}>
+                {p.tech.slice(0,3).map(t=><span key={t} className="mono" style={{fontSize:10,color:accent,letterSpacing:1,opacity:0.7}}>{t}</span>)}
+                {p.tech.length>3&&<span className="mono" style={{fontSize:10,color:'#3a3a52',letterSpacing:1}}>+{p.tech.length-3}</span>}
+              </div>
+              <div className="mono" style={{fontSize:10,color:`${accent}80`,letterSpacing:2,display:'flex',alignItems:'center',gap:8}}>
+                <span style={{animation:'blipPulse 2s infinite',display:'inline-block',width:6,height:6,borderRadius:'50%',background:accent}}></span>
+                CLICK FOR DETAILS
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {modal&&<ProjectModal project={modal} accent={accent} onClose={()=>setModal(null)}/>}
+    </section>
+  );
+}
+
+/* ── CREDENTIALS ── */
+function Credentials({accent,showKanji}){
+  const edu=[
+    {d:"B.E. Electronics & Telecom",s:"Vasantdada Patil Pratishthan College of Engineering",y:"2024",g:"7.25 CGPA"},
+    {d:"Diploma in Electronics & Telecom",s:"Vidyalankar Polytechnic",y:"2021",g:"92.94%"},
+  ];
+  return(
+    <section className="section-pad-sm" style={{padding:'40px 48px 80px',maxWidth:1200,margin:'0 auto'}}>
+      <div className="cred-grid" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:48}}>
+        <div style={{overflow:'hidden'}}>
+          <SmallChapterHead num="05a" en="Certifications" accent={accent}/>
+          <div style={{display:'flex',flexDirection:'column',gap:2}}>
+            {certs.map((c,i)=>{
+              const ref=React.useRef(); useReveal(ref,i*100);
+              return(
+                <div key={i} ref={ref} className="panel reveal" style={{background:'#0d0d16',padding:'24px 28px',display:'flex',gap:16,alignItems:'flex-start',transition:'border-color 0.3s'}}
+                  onMouseEnter={e=>e.currentTarget.style.borderColor=`${accent}40`}
+                  onMouseLeave={e=>e.currentTarget.style.borderColor='#1e1e2e'}>
+                  <div style={{width:6,height:6,background:accent,flexShrink:0,marginTop:6,boxShadow:`0 0 10px ${accent}`}}></div>
+                  <div>
+                    <div style={{fontSize:15,fontWeight:600,color:'#e8e0d0',marginBottom:4}}>{c.name}</div>
+                    <div className="mono" style={{fontSize:11,color:'#5a5a7a'}}>{c.sub}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{overflow:'hidden'}}>
+          <SmallChapterHead num="05b" en="Education" accent={accent}/>
+          <div style={{display:'flex',flexDirection:'column',gap:2}}>
+            {edu.map((e,i)=>{
+              const ref=React.useRef(); useReveal(ref,i*100);
+              return(
+                <div key={i} ref={ref} className="panel reveal" style={{background:'#0d0d16',padding:'24px 28px',transition:'border-color 0.3s'}}
+                  onMouseEnter={ev=>ev.currentTarget.style.borderColor=`${accent}40`}
+                  onMouseLeave={ev=>ev.currentTarget.style.borderColor='#1e1e2e'}>
+                  <div style={{fontSize:14,fontWeight:600,color:'#e8e0d0',marginBottom:4}}>{e.d}</div>
+                  <div style={{fontSize:12,color:'#5a5a7a',marginBottom:10,lineHeight:1.5}}>{e.s}</div>
+                  <div style={{display:'flex',gap:20}}>
+                    <span className="mono" style={{fontSize:11,color:'#3a3a52'}}>{e.y}</span>
+                    <span className="mono" style={{fontSize:11,color:accent}}>{e.g}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ── CONTACT ── */
+function Contact({accent}){
+  const ref=React.useRef(); useReveal(ref);
+  return(
+    <section id="contact" className="contact-pad" style={{padding:'80px 48px 64px',borderTop:'1px solid #1a1a28',position:'relative',overflow:'hidden'}}>
+      <div style={{position:'absolute',inset:0,background:'repeating-conic-gradient(from 0deg at 110% 50%,transparent 0deg,rgba(232,60,60,0.01) 0.25deg,transparent 0.5deg)',pointerEvents:'none',opacity:0.5}}></div>
+      <div ref={ref} className="reveal" style={{maxWidth:860,margin:'0 auto',position:'relative',zIndex:1,textAlign:'center'}}>
+        <div className="chapter-mark" style={{'--acc':accent,justifyContent:'center'}}>
+          <span className="mono" style={{fontSize:10,color:accent,letterSpacing:3}}>CHAPTER 06</span>
+        </div>
+        <h2 className="display" style={{fontSize:'clamp(40px,7vw,100px)',letterSpacing:4,color:'#e8e0d0',lineHeight:0.95,marginBottom:8}}>LET'S</h2>
+        <h2 className="display" style={{fontSize:'clamp(40px,7vw,100px)',letterSpacing:4,color:accent,lineHeight:0.95,marginBottom:32}}>CONNECT</h2>
+        <p style={{fontSize:15,color:'#6a6a7a',maxWidth:480,lineHeight:1.8,marginBottom:40,margin:'0 auto 40px'}}>Open to network security, firewall engineering, and NOC roles. Also happy to talk ML, homelab, or anything interesting.</p>
+        <div style={{display:'flex',gap:16,flexWrap:'wrap',justifyContent:'center'}}>
+          {[{label:"EMAIL",val:me.email,href:`mailto:${me.email}`},{label:"PHONE",val:me.phone,href:`tel:${me.phone.replace(/\s/g,'')}`},{label:"LINKEDIN",val:"arvind-nagaonkar",href:me.linkedin}].map(c=>(
+            <a key={c.label} href={c.href} style={{padding:'16px 28px',border:'1px solid #1e1e2e',color:'#5a5a7a',textDecoration:'none',fontFamily:'JetBrains Mono',fontSize:12,transition:'all 0.2s',clipPath:'polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,8px 100%,0 calc(100% - 8px))'}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor=accent;e.currentTarget.style.color=accent;e.currentTarget.style.background=`${accent}0a`}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor='#1e1e2e';e.currentTarget.style.color='#5a5a7a';e.currentTarget.style.background='transparent'}}>
+              <div style={{fontSize:9,letterSpacing:3,marginBottom:6,opacity:0.5}}>{c.label}</div>{c.val}
+            </a>
+          ))}
+        </div>
+      </div>
+      <div style={{marginTop:64,paddingTop:28,borderTop:'1px solid #12121c',display:'flex',justifyContent:'center',alignItems:'center',gap:24,flexWrap:'wrap'}}>
+        <span className="mono" style={{fontSize:10,color:'#2a2a38',letterSpacing:2}}>© 2026 ARVIND NAGAONKAR</span>
+        <span style={{color:'#1e1e2e',fontSize:10}}>·</span>
+        <JpWord char="信号は届く" romaji="Shingō wa todoku" meaning="The signal reaches" style={{fontSize:11,color:'#2a2a38',letterSpacing:2}} />
+      </div>
+    </section>
+  );
+}
+
+/* ── INTRO ── */
+function Intro({onDone,accent}){
+  const [phase,setPhase]=React.useState(0);
+  React.useEffect(()=>{
+    const t1=setTimeout(()=>setPhase(1),2200);
+    const t2=setTimeout(()=>onDone(),2800);
+    return()=>{clearTimeout(t1);clearTimeout(t2)};
+  },[]);
+  return(
+    <div style={{position:'fixed',inset:0,background:'#08080d',zIndex:1000,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',opacity:phase?0:1,transition:'opacity 0.6s',pointerEvents:phase?'none':'auto'}}>
+      <div className="scanlines"></div>
+      <div style={{position:'absolute',top:0,left:0,right:0,height:2,background:accent,animation:'lf 1.5s ease forwards'}}></div>
+      <div style={{textAlign:'center',animation:'fadeUp 0.8s 0.4s both',padding:'0 24px'}}>
+        <div className="jp" style={{fontSize:13,color:'#3a3a52',letterSpacing:8,marginBottom:16}} title="Daiichi-wa — Episode One">第一話</div>
+        <div className="display" style={{fontSize:'clamp(40px,8vw,96px)',color:'#e8e0d0',letterSpacing:6,lineHeight:1}}>
+          ARVIND<br/><span style={{color:accent}}>NAGAONKAR</span>
+        </div>
+        <div className="mono" style={{fontSize:11,color:'#3a3a52',letterSpacing:4,marginTop:16}}>NOC ENGINEER // NETWORK SECURITY</div>
+      </div>
+      <div style={{position:'absolute',bottom:48,width:'min(240px,80vw)'}}>
+        <div style={{height:1,background:'#1a1a28',marginBottom:8,overflow:'hidden'}}>
+          <div style={{height:'100%',background:accent,animation:'lf 2s ease forwards'}}></div>
+        </div>
+        <div className="mono" style={{fontSize:10,color:'#3a3a52',letterSpacing:2,textAlign:'center'}}>INITIALIZING...</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── APP ── */
+function App(){
+  const [tweaks,setTweak]=useTweaks(TWEAK_DEFAULTS);
+  const [ready,setReady]=React.useState(false);
+  const acc=tweaks.accentColor;
+  React.useEffect(()=>{
+    const cleanup=initHeroCanvas(acc,tweaks.bgAnim);
+    return cleanup;
+  },[acc,tweaks.bgAnim]);
+  return(
+    <>
+      {!ready&&<Intro accent={acc} onDone={()=>setReady(true)}/>}
+      <div style={{opacity:ready?1:0,transition:'opacity 0.6s'}}>
+        <Nav accent={acc}/>
+        <Hero accent={acc} showRadar={tweaks.showRadar}/>
+        <Skills accent={acc} showKanji={tweaks.showKanji}/>
+        <Experience accent={acc} showKanji={tweaks.showKanji}/>
+        <Projects accent={acc} showKanji={tweaks.showKanji}/>
+        <Credentials accent={acc} showKanji={tweaks.showKanji}/>
+        <Contact accent={acc}/>
+      </div>
+      <TweaksPanel>
+        <TweakSection label="Accent">
+          <TweakColor label="Primary Color" value={tweaks.accentColor} onChange={v=>setTweak('accentColor',v)}/>
+        </TweakSection>
+        <TweakSection label="Presets">
+          <TweakRadio label="Theme" value={tweaks.accentColor}
+            options={[{value:"#e83c3c",label:"Signal Red"},{value:"#f0a832",label:"Amber"},{value:"#3c8ae8",label:"Data Blue"},{value:"#a64ce8",label:"Violet"}]}
+            onChange={v=>setTweak('accentColor',v)}/>
+        </TweakSection>
+        <TweakSection label="Elements">
+          <TweakToggle label="Background animation" value={tweaks.bgAnim} onChange={v=>setTweak('bgAnim',v)}/>
+          <TweakToggle label="Radar (hero)" value={tweaks.showRadar} onChange={v=>setTweak('showRadar',v)}/>
+          <TweakToggle label="Kanji watermarks" value={tweaks.showKanji} onChange={v=>setTweak('showKanji',v)}/>
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
