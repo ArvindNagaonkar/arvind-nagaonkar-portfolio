@@ -607,7 +607,7 @@ const certs = [
 ];
 
 /* ── SCRAMBLE TEXT ── */
-const SCRAMBLE_CHARS = 'アイウエオカキクケコ#$%&@X*!?/\\01';
+const SCRAMBLE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#$%&@*!?';
 function ScrambleText({ text, accent, trigger, className, style }) {
   const [display, setDisplay] = React.useState(()=>text.split('').map(()=>SCRAMBLE_CHARS[Math.floor(Math.random()*SCRAMBLE_CHARS.length)]));
   const locked = React.useRef(new Array(text.length).fill(false));
@@ -627,7 +627,7 @@ function ScrambleText({ text, accent, trigger, className, style }) {
     if (!trigger) return;
     locked.current = new Array(text.length).fill(false);
     t0.current = null;
-    const TOTAL = 1600, STEP = TOTAL / text.length;
+    const TOTAL = 800, STEP = TOTAL / text.length;
     function tick(ts) {
       if (!t0.current) t0.current = ts;
       const elapsed = ts - t0.current;
@@ -644,7 +644,7 @@ function ScrambleText({ text, accent, trigger, className, style }) {
   return (
     <h1 className={className} style={style}>
       {display.map((ch,i) => (
-        <span key={i} style={{color: locked.current[i] ? accent : `${accent}80`, display:'inline-block', transition:'color 0.06s'}}>{ch}</span>
+        <span key={i} style={{color: locked.current[i] ? accent : `${accent}80`, display:'inline-block', minWidth:'0.62em', textAlign:'center', transition:'color 0.06s'}}>{ch}</span>
       ))}
     </h1>
   );
