@@ -4,6 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Arvind Nagaonkar</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@300;400;500&family=Noto+Serif+JP:wght@300;400&display=swap" rel="stylesheet" />
@@ -607,8 +608,15 @@ const certs = [
 ];
 
 /* ── SCRAMBLE TEXT ── */
-const SCRAMBLE_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ#$%&@*!?';
-function ScrambleText({ text, accent, trigger, className, style }) {
+const SCRAMBLE_CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワン';
+function ScrambleText({
+  text, accent, trigger, className, style,
+  duration    = 800,   // ms — total decode animation length
+  glitchDelay = 3500,  // ms — min idle time before a glitch flash
+  glitchJitter= 4000,  // ms — random extra added to glitchDelay
+  glitchHold  = 80,    // ms — min time a glitch char stays visible
+  glitchHoldJitter = 120, // ms — random extra added to glitchHold
+}) {
   const [display, setDisplay] = React.useState(()=>text.split('').map(()=>SCRAMBLE_CHARS[Math.floor(Math.random()*SCRAMBLE_CHARS.length)]));
   const locked = React.useRef(new Array(text.length).fill(false));
   const raf = React.useRef(null);
@@ -619,15 +627,15 @@ function ScrambleText({ text, accent, trigger, className, style }) {
     glitchTimer.current = setTimeout(() => {
       const idx = Math.floor(Math.random()*text.length);
       setDisplay(prev => { const n=[...prev]; n[idx]=SCRAMBLE_CHARS[Math.floor(Math.random()*SCRAMBLE_CHARS.length)]; return n; });
-      setTimeout(() => { setDisplay(text.split('')); scheduleGlitch(); }, 80+Math.random()*120);
-    }, 3500+Math.random()*4000);
-  }, [text]);
+      setTimeout(() => { setDisplay(text.split('')); scheduleGlitch(); }, glitchHold+Math.random()*glitchHoldJitter);
+    }, glitchDelay+Math.random()*glitchJitter);
+  }, [text, glitchDelay, glitchJitter, glitchHold, glitchHoldJitter]);
 
   React.useEffect(() => {
     if (!trigger) return;
     locked.current = new Array(text.length).fill(false);
     t0.current = null;
-    const TOTAL = 800, STEP = TOTAL / text.length;
+    const TOTAL = duration, STEP = TOTAL / text.length;
     function tick(ts) {
       if (!t0.current) t0.current = ts;
       const elapsed = ts - t0.current;
@@ -642,9 +650,9 @@ function ScrambleText({ text, accent, trigger, className, style }) {
   }, [trigger, text, scheduleGlitch]);
 
   return (
-    <h1 className={className} style={style}>
+    <h1 className={className} style={{...style, whiteSpace:'nowrap'}}>
       {display.map((ch,i) => (
-        <span key={i} style={{color: locked.current[i] ? accent : `${accent}80`, display:'inline-block', minWidth:'0.62em', textAlign:'center', transition:'color 0.06s'}}>{ch}</span>
+        <span key={i} style={{color: locked.current[i] ? accent : `${accent}80`, transition:'color 0.06s'}}>{ch}</span>
       ))}
     </h1>
   );
@@ -1012,6 +1020,11 @@ function Hero({accent,showRadar}){
             trigger={in_}
             className="display"
             style={{fontSize:'clamp(60px,9vw,140px)',lineHeight:0.92,letterSpacing:4}}
+            duration={1600}
+            glitchDelay={2500}
+            glitchJitter={3000}
+            glitchHold={120}
+            glitchHoldJitter={130}
           />
         </div>
         <div style={{...a(240),display:'flex',alignItems:'center',gap:16,margin:'8px 0 16px'}}>
