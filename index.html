@@ -1023,6 +1023,10 @@ function Hero({accent,showRadar}){
             onMouseEnter={e=>e.currentTarget.style.opacity='0.85'} onMouseLeave={e=>e.currentTarget.style.opacity='1'}>MISSION LOG</a>
           <a href={`mailto:${me.email}`} style={{padding:'13px 32px',border:'1px solid #2a2a3e',color:'#7a7a9a',fontWeight:500,fontSize:13,textDecoration:'none',letterSpacing:1,transition:'all 0.2s'}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=accent;e.currentTarget.style.color=accent}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#2a2a3e';e.currentTarget.style.color='#7a7a9a'}}>CONTACT</a>
+          <a href="/Arvind-Nagaonkar-Resume.docx" download style={{padding:'13px 32px',border:'1px solid #2a2a3e',color:'#7a7a9a',fontWeight:500,fontSize:13,textDecoration:'none',letterSpacing:1,transition:'all 0.2s',display:'flex',alignItems:'center',gap:8}}
+            onMouseEnter={e=>{e.currentTarget.style.borderColor=accent;e.currentTarget.style.color=accent}} onMouseLeave={e=>{e.currentTarget.style.borderColor='#2a2a3e';e.currentTarget.style.color='#7a7a9a'}}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            RESUME</a>
         </div>
         <div className="hero-stats" style={{...a(600),display:'flex',gap:48,marginTop:32,paddingTop:20,borderTop:'1px solid #1a1a28'}}>
           {[{v:"~90 Tbps",l:"Backbone"},{v:">99%",l:"SLA adherence"},{v:"52+",l:"Global clients"},{v:"NSE 4",l:"Fortinet"}].map(s=>(
@@ -1098,16 +1102,16 @@ function Skills({accent,showKanji}){
           <div key={i} ref={refs[i]} className="panel reveal" style={{padding:'32px 28px',background:i%2===0?'#0d0d16':'#0a0a12',transition:'border-color 0.3s,box-shadow 0.3s,opacity 0.7s,transform 0.7s',transitionDelay:`${i*80}ms`}}
             onMouseEnter={e=>{e.currentTarget.style.borderColor=`${accent}50`;e.currentTarget.style.boxShadow=`inset 0 0 40px ${accent}06`}}
             onMouseLeave={e=>{e.currentTarget.style.borderColor='#1e1e2e';e.currentTarget.style.boxShadow='none'}}>
-            <div style={{display:'flex',alignItems:'baseline',gap:10,marginBottom:8}}>
-              <JpWord char={s.jp} romaji={['Tsūshin','Bōei','Kiban','Kōgaku'][i]} meaning={['Telecommunications','Defense / Security','Infrastructure','Engineering'][i]} style={{fontSize:28,color:accent,opacity:0.7,fontWeight:300}} />
-              <span className="mono" style={{fontSize:9,color:'#3a3a52',letterSpacing:2,textTransform:'uppercase'}}>{s.en}</span>
+            <div style={{marginBottom:8}}>
+              <div className="display" style={{fontSize:'clamp(17px,1.5vw,22px)',color:'#e8e0d0',letterSpacing:3,lineHeight:1,marginBottom:8}}>{s.en.toUpperCase()}</div>
+              <JpWord char={s.jp} romaji={['Tsūshin','Bōei','Kiban','Kōgaku'][i]} meaning={['Telecommunications','Defense / Security','Infrastructure','Engineering'][i]} style={{fontSize:12,color:'#3a3a52',fontWeight:300}} />
             </div>
-            <div style={{height:1,background:`${accent}20`,margin:'16px 0 20px'}}></div>
+            <div style={{height:1,background:'#1e1e2e',margin:'16px 0 20px'}}></div>
             <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
               {s.items.map((item,j)=>(
-                <span key={item} className="mono" style={{padding:'5px 11px',fontSize:11,border:`1px solid ${accent}28`,color:`${accent}cc`,background:`${accent}08`,transition:'all 0.2s',transitionDelay:`${j*40}ms`,opacity:vis[i]?1:0,transform:vis[i]?'none':'translateY(8px)'}}
-                  onMouseEnter={e=>{e.currentTarget.style.background=`${accent}20`;e.currentTarget.style.borderColor=`${accent}60`}}
-                  onMouseLeave={e=>{e.currentTarget.style.background=`${accent}08`;e.currentTarget.style.borderColor=`${accent}28`}}
+                <span key={item} className="mono" style={{padding:'5px 11px',fontSize:11,border:'1px solid #252535',color:'#6a6a8a',background:'rgba(255,255,255,0.02)',transition:'all 0.2s',transitionDelay:`${j*40}ms`,opacity:vis[i]?1:0,transform:vis[i]?'none':'translateY(8px)'}}
+                  onMouseEnter={e=>{e.currentTarget.style.background=`${accent}15`;e.currentTarget.style.borderColor=`${accent}60`;e.currentTarget.style.color=accent}}
+                  onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,0.02)';e.currentTarget.style.borderColor='#252535';e.currentTarget.style.color='#6a6a8a'}}
                 >{item}</span>
               ))}
             </div>
